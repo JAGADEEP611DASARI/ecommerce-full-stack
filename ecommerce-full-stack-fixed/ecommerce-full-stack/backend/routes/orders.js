@@ -1,0 +1,6 @@
+const router=require('express').Router();const Order=require('../models/Order');const Product=require('../models/Product');const {auth,admin}=require('../middleware/auth');
+router.post('/',auth,async(req,res)=>{try{const {items,shippingAddress}=req.body;if(!items?.length)return res.status(400).json({message:'Cart is empty'});let total=0;const normalized=[];for(const i of items){const p=await Product.findById(i.product);if(!p||p.stock<i.quantity)return res.status(400).json({message:`Insufficient stock for ${p?.name||'product'}`});total+=p.price*i.quantity;normalized.push({product:p._id,name:p.name,price:p.price,quantity:i.quantity});}const order=await Order.create({user:req.user._id,items:normalized,total,shippingAddress});for(const i of items)await Product.findByIdAndUpdate(i.product,{$inc:{stock:-i.quantity}});res.status(201).json(order)}catch(e){res.status(500).json({message:e.message})}});
+router.get('/mine',auth,async(req,res)=>res.json(await Order.find({user:req.user._id}).populate('items.product').sort({createdAt:-1})));
+router.get('/',auth,admin,async(req,res)=>res.json(await Order.find().populate('user','name email').sort({createdAt:-1})));
+router.patch('/:id/status',auth,admin,async(req,res)=>res.json(await Order.findByIdAndUpdate(req.params.id,{status:req.body.status},{new:true})));
+module.exports=router;
